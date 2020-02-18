@@ -8,15 +8,20 @@ def get_db():
             current_app.config['DATABASE'],
             detect_types=sqlite3.PARSE_DECLTYPES
         )
-        return g.db
-    else:
-        return g.db
 
-@app.teardown_appcontext
+        #if not have this result after execute querry only can access through index
+        #example:    result = cur.execute("SELECT username, password FROM users WHERE username = ?", [username]).fetchone()
+        #            data = result
+        #            password = data[1] #get password                Note:   if has it is  password = data['password']  
+        g.db.row_factory = sqlite3.Row
+
+    return g.db
+
+#@app.teardown_appcontext
 def close_db():
     db = g.pop('db', None)
     if db is not None:
-            db.close()
+        db.close()
 
 
 
