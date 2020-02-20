@@ -51,7 +51,7 @@ def create_app(test_config = None):
 
     #About
     @app.route('/about')
-    @is_logged_in
+    #@is_logged_in
     def about():
         return render_template('about.html')
 
@@ -137,10 +137,8 @@ def create_app(test_config = None):
 
         # Create cursor
             cur = get_db()
-
         # Get user by username
             result = cur.execute("SELECT username, password FROM users WHERE username = ?", [username]).fetchone()
-
             if result is None:
                 error = 'Tài khoản hoặc mật khẩu không chính xác!'
                 return render_template('login.html', error=error)
@@ -162,6 +160,7 @@ def create_app(test_config = None):
                     error = 'Tài khoản hoặc mật khẩu không chính xác!'
                     return render_template('login.html', error=error)
             # Close connection
+            cur.commit()
             cur.close()
         return render_template('login.html')
 
@@ -172,17 +171,178 @@ def create_app(test_config = None):
             if 'logged_in' in session:
                 return f(*args, **kwargs)
             else:
-                flash('Bạn không có quyền truy cập trang này! Hãy đăng nhập!', 'danger')
+                flash('Hãy đăng nhập để xem nội dung này!', 'danger')
                 return redirect(url_for('login'))
         return wrap
 
-# Logout
+    # Logout
     @app.route('/logout')
     @is_logged_in
     def logout():
         session.clear()
         flash('Đăng xuất thành công!', 'success')
         return redirect(url_for('login'))
+
+    # Articles
+    @app.route('/articles')
+    def articles():
+        cur = get_db()
+        res = cur.execute("SELECT * FROM articles WHERE publish = ? ",['Publish'])
+        articles = res.fetchall()
+        cur.commit()
+        cur.close()
+
+        if res is None:
+            msg = 'Không có bài viêt!!!'
+            return render_template('articles.html', msg=msg)
+        else:
+            return render_template('articles.html', articles = articles)
+
+    # Single Article
+    @app.route('/article/<string:id>/')
+    def article(id):
+        # Create cursor
+        cur = get_db()
+        # Get article
+        res = cur.execute("SELECT * FROM articles WHERE id = ?", [id])
+        article = res.fetchone()
+        cur.commit()
+        cur.close()
+        return render_template('article.html', article=article)
+    
+    # Dashboard
+    @app.route('/dashboard')
+    @is_logged_in
+    def dashboard():
+        cur = get_db()
+        res = cur.execute("SELECT * from articles WHERE author = ?", [session['username']])
+        articles = res.fetchall()
+        cur.commit
+        cur.close
+        if res is None:
+            msg = 'Bạn chưa tạo bài viết nào! Hãy bắt đầu viết một bài viết đi nào :)'
+            return render_template('dashboard.html', msg = msg)
+        else:
+            return render_template('dashboard.html', articles = articles)
+# Article Form Class
+    class ArticleForm(Form):
+        title = StringField('Tiêu đề', [validators.Length(min=1, max=200)])
+        body = TextAreaField('Nội dung', [validators.Length(min=1)])
+
+# Add Article
+    @app.route('/add_article', methods=['GET', 'POST'])
+    @is_logged_in
+    def add_article():
+        form = ArticleForm(request.form)
+        if request.method == 'POST' and form.validate():
+            title = form.title.data
+            body = form.body.data
+
+        # Create Cursor
+            cur = get_db()
+
+        # Execute
+            cur.execute("INSERT INTO articles(title, body, author) VALUES(?, ?, ?)",(title, body, session['username']))
+
+        # Commit to DB
+            cur.commit()
+
+        #Close connection
+            cur.close()
+
+            flash('Article Created', 'success')
+
+            return redirect(url_for('dashboard'))
+
+        return render_template('add_article.html', form=form)
+
+
+# Edit Article
+    @app.route('/edit_article/<string:id>', methods=['GET', 'POST'])
+    @is_logged_in
+    def edit_article(id):
+    # Create cursor
+        cur = get_db()
+    # Get article by id
+        result = cur.execute("SELECT * FROM articles WHERE id = ?", [id])
+        article = result.fetchone()
+        cur.commit()
+        #cur.close()
+        db_connector.close_db()
+    # Get form
+        form = ArticleForm(request.form)
+
+    # Populate article form fields
+        form.title.data = article['title']
+        form.body.data = article['body']
+
+        if request.method == 'POST' and form.validate():
+            title = request.form['title']
+            body = request.form['body']
+
+        # Create Cursor
+            cur = get_db()
+            cur.execute(
+                'UPDATE articles SET title = ?, body = ?'
+                ' WHERE id = ?',
+                (title, body, id)
+            )
+            #app.logger.info(title)
+         # Execute
+            cur.commit()
+        #Close connection
+            cur.close()
+            flash('Article Updated', 'success')
+            return redirect(url_for('dashboard'))
+
+        return render_template('edit_article.html', form=form)
+
+# Delete Article
+    @app.route('/delete_article/<string:id>', methods=['POST'])
+    @is_logged_in
+    def delete_article(id):
+    # Create cursor
+        cur = get_db()
+
+    # Execute
+        cur.execute("DELETE FROM articles WHERE id = ?", [id])
+
+    # Commit to DB
+        cur.commit()
+
+    #Close connection
+        cur.close()
+
+        flash('Article Deleted', 'success')
+
+        return redirect(url_for('dashboard'))
+# PP Article
+    @app.route('/pp_article/<string:id>', methods=['POST'])
+    @is_logged_in
+    def pp_article(id):
+    # Create cursor
+        cur = get_db()
+    
+    # Execute
+        if request.method == 'POST':
+            if request.form['hide_button'] == 'Publish':
+                cur.execute( 'UPDATE articles SET publish = ? WHERE id = ?',('Pending', id))
+                flash('Article '+ id +' is changed to "Pending"', 'success')
+            elif request.form['hide_button'] == 'Pending':
+                cur.execute( 'UPDATE articles SET publish = ? WHERE id = ?',('Publish', id))
+                flash('Article '+ id +' is changed to "Publish"', 'success')
+                
+    # Commit to DB
+        cur.commit()
+
+    #Close connection
+        cur.close()
+
+        
+
+        return redirect(url_for('dashboard'))
+
+
 
 
 
